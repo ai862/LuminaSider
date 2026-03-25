@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "LuminaSider",
+  "version": "1.0.0",
+  "description": "Chrome 侧边栏 AI 助手",
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "unlimitedStorage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "src/background/index.ts",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content/index.ts"]
+    }
+  ],
+  "action": {
+    "default_title": "打开 LuminaSider"
+  },
+  "side_panel": {
+    "default_path": "index.html"
+  },
+  "icons": {
+    "16": "public/icons/icon16.png",
+    "48": "public/icons/icon48.png",
+    "128": "public/icons/icon128.png"
+  }
+}
