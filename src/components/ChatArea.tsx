@@ -402,7 +402,7 @@ export function ChatArea() {
           <Bot className="w-8 h-8 text-accent" />
         </div>
         <h3 className="text-lg font-medium mb-2">你好，我是 LuminaSider</h3>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 max-w-[280px]">
+        <p className="text-[15px] text-gray-500 dark:text-gray-400 mb-8 max-w-[280px]">
           {pageContext 
             ? "我已经阅读了当前网页。你可以问我任何问题。" 
             : "我是一个 AI 助手，可以帮你阅读网页、总结内容、解答问题。"}
@@ -411,21 +411,21 @@ export function ChatArea() {
         <div className="flex flex-col gap-2 w-full max-w-[280px]">
           <button 
             onClick={() => handleShortcut('请总结当前网页的核心观点')}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-sm text-left transition-colors border border-gray-100 dark:border-gray-800"
+            className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-[15px] text-left transition-colors border border-gray-100 dark:border-gray-800"
           >
             <Sparkles className="w-4 h-4 text-accent shrink-0" />
             <span className="truncate">总结核心观点</span>
           </button>
           <button 
             onClick={() => handleShortcut('请将当前网页的主要内容翻译为中文')}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-sm text-left transition-colors border border-gray-100 dark:border-gray-800"
+            className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-[15px] text-left transition-colors border border-gray-100 dark:border-gray-800"
           >
             <Languages className="w-4 h-4 text-accent shrink-0" />
             <span className="truncate">翻译为中文</span>
           </button>
           <button 
             onClick={() => handleShortcut('请解释当前网页中出现的专业术语')}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-sm text-left transition-colors border border-gray-100 dark:border-gray-800"
+            className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-[15px] text-left transition-colors border border-gray-100 dark:border-gray-800"
           >
             <BookOpen className="w-4 h-4 text-accent shrink-0" />
             <span className="truncate">解释专业术语</span>
@@ -466,7 +466,7 @@ export function ChatArea() {
                     href={msg.attachedContext.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700 rounded-full px-2 py-0.5 text-[11px] text-slate-500 hover:text-blue-500 transition-colors self-end truncate max-w-full"
+                    className="inline-flex items-center gap-1 bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700 rounded-full px-2 py-0.5 text-xs text-slate-500 hover:text-blue-500 transition-colors self-end truncate max-w-full"
                     title={msg.attachedContext.title}
                   >
                     <Link className="w-3 h-3 shrink-0" />
@@ -480,7 +480,7 @@ export function ChatArea() {
                     ))}
                   </div>
                 )}
-                <div className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</div>
+                <div className="whitespace-pre-wrap text-[15px] leading-relaxed">{msg.content}</div>
               </>
             ) : (
               <div className="w-full overflow-hidden">
@@ -514,7 +514,7 @@ export function ChatArea() {
                         <span>{isThinking ? '深度思考中...' : '已深度思考'}</span>
                         <ChevronDown className="w-3.5 h-3.5 ml-auto transition-transform group-open:rotate-180" />
                       </summary>
-                      <div className="px-4 pb-3 pt-1 text-[13px] leading-relaxed text-gray-500 dark:text-gray-400 border-t border-gray-200/60 dark:border-gray-700/60 whitespace-pre-wrap font-mono">
+                      <div className="px-4 pb-3 pt-1 text-sm leading-relaxed text-gray-500 dark:text-gray-400 border-t border-gray-200/60 dark:border-gray-700/60 whitespace-pre-wrap font-mono">
                         {reasoningText}
                       </div>
                     </details>
@@ -522,7 +522,7 @@ export function ChatArea() {
                 })()}
 
                 {/* Main Content */}
-                <div className="prose prose-sm dark:prose-invert max-w-none w-full
+                <div className="prose dark:prose-invert max-w-none w-full text-[15px]
                   prose-p:leading-relaxed prose-p:my-1.5
                   prose-headings:my-2 prose-headings:font-semibold
                   prose-ul:my-1.5 prose-li:my-0.5

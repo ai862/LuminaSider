@@ -545,7 +545,7 @@ export function InputArea() {
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           placeholder="输入你的问题... (Enter 发送，Shift+Enter 换行)"
-          className="flex-1 max-h-[120px] min-h-[24px] bg-transparent border-none resize-none focus:ring-0 focus:outline-none outline-none text-sm py-1.5 px-1 text-gray-800 dark:text-gray-200 placeholder-gray-400"
+          className="flex-1 max-h-[120px] min-h-[24px] bg-transparent border-none resize-none focus:ring-0 focus:outline-none outline-none text-[15px] py-1.5 px-1 text-gray-800 dark:text-gray-200 placeholder-gray-400"
           rows={1}
           disabled={isLoading}
         />
