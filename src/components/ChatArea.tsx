@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useStore, getAttachmentBlob, defaultProviderConfigs } from '../store';
 import ReactMarkdown from 'react-markdown';
-import { Bot, User, Sparkles, Languages, BookOpen, Link, Copy, Check, FileImage, Brain, ChevronDown } from 'lucide-react';
+import { Bot, User, Sparkles, Languages, BookOpen, Link, Copy, Check, FileImage, Brain, ChevronDown, ArrowDown, Ban } from 'lucide-react';
 import hljs from 'highlight.js';
+// DOMPurify is available for future HTML sanitization needs
 
 const AttachmentView = ({ id, mimeType }: { id: string; mimeType: string }) => {
   const [dataUrl, setDataUrl] = useState<string | null>(null);
@@ -108,22 +109,60 @@ const CodeBlock = ({ className, children, node, ...props }: any) => {
 };
 
 export function ChatArea() {
-  const { getCurrentSession, pageContext, addMessage, updateMessageContent, apiProvider, providerConfigs, useContext } = useStore();
+  const { getCurrentSession, pageContext, addMessage, updateMessageContent, apiProvider, providerConfigs, useContext, getCurrentAgent, isGenerating } = useStore();
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+
   const currentConfig = providerConfigs[apiProvider] || defaultProviderConfigs[apiProvider] || defaultProviderConfigs['gemini'];
   const { apiKey, baseUrl, model } = currentConfig;
+  const agentPrompt = getCurrentAgent().systemPrompt;
 
   const currentSession = getCurrentSession();
-  const messages = currentSession?.messages ||[];
+  const messages = currentSession?.messages || [];
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  // 检测是否在底部
+  const checkIfAtBottom = useCallback(() => {
+    const container = chatContainerRef.current;
+    if (!container) return true;
 
+    const threshold = 100; // 距离底部 100px 以内视为在底部
+    const isBottom = container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
+    return isBottom;
+  }, []);
+
+  // 滚动到底部
+  const scrollToBottom = useCallback((smooth = true) => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: smooth ? 'smooth' : 'auto'
+      });
+    }
+  }, []);
+
+  // 监听滚动事件，更新是否在底部的状态
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    const container = chatContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const atBottom = checkIfAtBottom();
+      setIsAtBottom(atBottom);
+      setShowScrollButton(!atBottom);
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [checkIfAtBottom]);
+
+  // 智能自动滚动：只有当用户在底部或正在生成时才自动滚动
+  useEffect(() => {
+    if (isGenerating || isAtBottom) {
+      scrollToBottom();
+    }
+  }, [messages, isGenerating, isAtBottom, scrollToBottom]);
 
   const handleShortcut = async (promptText: string) => {
     if (!apiKey && apiProvider !== 'ollama') {
@@ -172,7 +211,9 @@ export function ChatArea() {
         const isThinkingModel = model.toLowerCase().includes('thinking');
 
         if (useContext && pageContext) {
-          prompt += `你是一个网页阅读助手。请根据以下网页内容回答用户的问题。\n\n<context>\n标题: ${pageContext.title}\n内容: ${pageContext.content}\n</context>\n\n`;
+          prompt += `${agentPrompt}\n\n<context>\n标题: ${pageContext.title}\n内容: ${pageContext.content}\n</context>\n\n`;
+        } else if (agentPrompt) {
+          prompt += `${agentPrompt}\n\n`;
         }
         
         // 添加纯文本的历史对话以节约 Token
@@ -235,7 +276,9 @@ export function ChatArea() {
         
         let systemPrompt = '';
         if (useContext && pageContext) {
-          systemPrompt = `你是一个网页阅读助手。请根据以下网页内容回答用户的问题。\n\n<context>\n标题: ${pageContext.title}\n内容: ${pageContext.content}\n</context>`;
+          systemPrompt = `${agentPrompt}\n\n<context>\n标题: ${pageContext.title}\n内容: ${pageContext.content}\n</context>`;
+        } else {
+          systemPrompt = agentPrompt;
         }
 
         const anthropicMessages: any[] =[];
@@ -308,7 +351,12 @@ export function ChatArea() {
         if (useContext && pageContext) {
           openAiMessages.push({
             role: 'system',
-            content: `你是一个网页阅读助手。请根据以下网页内容回答用户的问题。\n\n<context>\n标题: ${pageContext.title}\n内容: ${pageContext.content}\n</context>`
+            content: `${agentPrompt}\n\n<context>\n标题: ${pageContext.title}\n内容: ${pageContext.content}\n</context>`
+          });
+        } else if (agentPrompt) {
+          openAiMessages.push({
+            role: 'system',
+            content: agentPrompt
           });
         }
 
@@ -402,7 +450,7 @@ export function ChatArea() {
           <Bot className="w-8 h-8 text-accent" />
         </div>
         <h3 className="text-lg font-medium mb-2">你好，我是 LuminaSider</h3>
-        <p className="text-[15px] text-gray-500 dark:text-gray-400 mb-8 max-w-[280px]">
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 max-w-[280px]">
           {pageContext 
             ? "我已经阅读了当前网页。你可以问我任何问题。" 
             : "我是一个 AI 助手，可以帮你阅读网页、总结内容、解答问题。"}
@@ -411,21 +459,21 @@ export function ChatArea() {
         <div className="flex flex-col gap-2 w-full max-w-[280px]">
           <button 
             onClick={() => handleShortcut('请总结当前网页的核心观点')}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-[15px] text-left transition-colors border border-gray-100 dark:border-gray-800"
+            className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-sm text-left transition-colors border border-gray-100 dark:border-gray-800"
           >
             <Sparkles className="w-4 h-4 text-accent shrink-0" />
             <span className="truncate">总结核心观点</span>
           </button>
           <button 
             onClick={() => handleShortcut('请将当前网页的主要内容翻译为中文')}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-[15px] text-left transition-colors border border-gray-100 dark:border-gray-800"
+            className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-sm text-left transition-colors border border-gray-100 dark:border-gray-800"
           >
             <Languages className="w-4 h-4 text-accent shrink-0" />
             <span className="truncate">翻译为中文</span>
           </button>
           <button 
             onClick={() => handleShortcut('请解释当前网页中出现的专业术语')}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-[15px] text-left transition-colors border border-gray-100 dark:border-gray-800"
+            className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg text-sm text-left transition-colors border border-gray-100 dark:border-gray-800"
           >
             <BookOpen className="w-4 h-4 text-accent shrink-0" />
             <span className="truncate">解释专业术语</span>
@@ -436,7 +484,7 @@ export function ChatArea() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-6">
+    <div className="flex-1 overflow-y-auto p-4 space-y-6 relative" ref={chatContainerRef}>
       {messages.map((msg) => (
         <div
           key={msg.id}
@@ -466,7 +514,7 @@ export function ChatArea() {
                     href={msg.attachedContext.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700 rounded-full px-2 py-0.5 text-xs text-slate-500 hover:text-blue-500 transition-colors self-end truncate max-w-full"
+                    className="inline-flex items-center gap-1 bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700 rounded-full px-2 py-0.5 text-[11px] text-slate-500 hover:text-blue-500 transition-colors self-end truncate max-w-full"
                     title={msg.attachedContext.title}
                   >
                     <Link className="w-3 h-3 shrink-0" />
@@ -480,7 +528,7 @@ export function ChatArea() {
                     ))}
                   </div>
                 )}
-                <div className="whitespace-pre-wrap text-[15px] leading-relaxed">{msg.content}</div>
+                <div className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</div>
               </>
             ) : (
               <div className="w-full overflow-hidden">
@@ -514,15 +562,23 @@ export function ChatArea() {
                         <span>{isThinking ? '深度思考中...' : '已深度思考'}</span>
                         <ChevronDown className="w-3.5 h-3.5 ml-auto transition-transform group-open:rotate-180" />
                       </summary>
-                      <div className="px-4 pb-3 pt-1 text-sm leading-relaxed text-gray-500 dark:text-gray-400 border-t border-gray-200/60 dark:border-gray-700/60 whitespace-pre-wrap font-mono">
+                      <div className="px-4 pb-3 pt-1 text-[13px] leading-relaxed text-gray-500 dark:text-gray-400 border-t border-gray-200/60 dark:border-gray-700/60 whitespace-pre-wrap font-mono">
                         {reasoningText}
                       </div>
                     </details>
                   );
                 })()}
 
+                {/* Stopped Marker */}
+                {msg.stopped && (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1.5 mb-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-300 w-fit">
+                    <Ban className="w-3.5 h-3.5 shrink-0" />
+                    <span className="font-medium">已停止生成</span>
+                  </div>
+                )}
+
                 {/* Main Content */}
-                <div className="prose dark:prose-invert max-w-none w-full text-[15px]
+                <div className="prose prose-sm dark:prose-invert max-w-none w-full
                   prose-p:leading-relaxed prose-p:my-1.5
                   prose-headings:my-2 prose-headings:font-semibold
                   prose-ul:my-1.5 prose-li:my-0.5
@@ -549,6 +605,17 @@ export function ChatArea() {
         </div>
       ))}
       <div ref={messagesEndRef} />
+
+      {/* 滚动到底部按钮 */}
+      {showScrollButton && (
+        <button
+          onClick={() => scrollToBottom(true)}
+          className="fixed bottom-24 right-6 p-3 bg-blue-500 hover:bg-blue-600 text-white rounded-full shadow-lg transition-all duration-200 hover:scale-110 active:scale-95 z-10"
+          title="滚动到底部"
+        >
+          <ArrowDown className="w-5 h-5" />
+        </button>
+      )}
     </div>
   );
 }

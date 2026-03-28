@@ -1,7 +1,7 @@
 {
   "name": "luminasider",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,8 +12,10 @@
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@mozilla/readability": "^0.5.0",
+    "@types/dompurify": "^3.0.5",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "dompurify": "^3.3.3",
     "highlight.js": "^11.9.0",
     "idb-keyval": "^6.2.2",
     "lucide-react": "^0.378.0",
