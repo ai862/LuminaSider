@@ -1,44 +1,31 @@
-# 更新日志 (Changelog)
+# Changelog
 
-所有值得注意的项目变更都将记录在此文件中。
+All notable changes to this project will be documented in this file.
 
-## [1.0.1] - 2026-03-27
+## [1.1.0] - 2026-03-28
 
-### 新增 (Added)
-- **手动刷新页面内容**：在 Header 中添加了刷新按钮，用户可以手动触发页面内容重新获取
-  - 支持点击"下一题"等 SPA 应用后手动刷新内容
-  - 提供旋转动画和 Toast 提示反馈
-  - 按钮仅在已读取网页时显示
+### Added
+- **Secure Storage System**: AES-256 encrypted API key storage with master password protection
+- **AI Agent System**: Customizable AI agents with 4 built-in presets (General, Code Expert, Creative Writer, Data Analyst)
+- **Unlock Modal**: Session-based security with master password requirement
+- **Agent Management**: Add, edit, and delete custom agents with personalized system prompts
 
-### 优化 (Improved)
-- **暂停输出功能**：优化了 AI 生成停止的机制
-  - 移除了消息内容中的"(已停止)"文本
-  - 改为在消息上方显示独立的"已停止生成"状态标记（琥珀色徽章）
-  - 消息内容完全保留，不会因为停止而被修改
-  - 修复了新消息可能意外显示"已停止"的问题
+### Security
+- API keys are now encrypted at rest using AES-256-GCM encryption
+- Master password required to unlock storage each session
+- Secure key derivation using PBKDF2 with 100,000 iterations
 
-### 修复 (Fixed)
-- **智能体占位符同步**：修复了在智能体管理中更新输入框占位符后，对话框中的占位符不更新的问题
-  - 移除了 `useMemo` 缓存，改为每次 render 时动态计算
-  - 确保占位符始终与当前智能体的配置保持同步
+### Changed
+- Updated store to support agent selection and management
+- Enhanced settings component with agent configuration UI
+- Improved API key handling with encryption/decryption flow
 
-### 技术细节 (Technical Details)
-- **Message 接口扩展**：添加了 `stopped?: boolean` 字段用于标记被手动停止的消息
-- **状态管理优化**：
-  - 在 `addMessage` 中明确设置 `stopped: false`
-  - 在 `updateMessageContent` 中清除 `stopped` 状态防止意外保留
-- **代码重构**：将 `extractContext` 函数提取为 `useCallback`，提高代码复用性
+## [1.0.1] - 2025-03-25
 
----
-
-## [1.0.0] - 初始版本
-
-### 核心特性
-- 📖 网页上下文感知（基于 Mozilla Readability）
-- 🤖 双引擎驱动（Google Gemini + OpenAI 兼容接口）
-- ⚡ SSE 流式输出，打字机效果
-- 🎨 Notion 级极简美学 UI
-- 🔒 隐私优先（API Key 仅存本地）
-- 💬 多智能体系统
-- 🖼️ 多模态图片交互
-- 📝 会话历史管理
+### Initial Release
+- Basic sidebar integration for browser
+- Google Gemini API integration
+- Chat functionality with AI
+- Markdown rendering support
+- Code syntax highlighting
+- Dark/Light theme support
