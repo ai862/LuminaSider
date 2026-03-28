@@ -490,7 +490,7 @@ export function InputArea() {
 
   return (
     <div className="p-4 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-primary shrink-0">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center gap-2 mb-3">
         <button
           onClick={() => setUseContext(!useContext)}
           className={`group flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium transition-all ${
@@ -501,6 +501,15 @@ export function InputArea() {
         >
           <FileText className={`w-3.5 h-3.5 ${useContext ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500 dark:group-hover:text-gray-300'}`} />
           {useContext ? '已附带当前网页' : '附带当前网页'}
+        </button>
+        
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="group flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium transition-all text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 ring-1 ring-transparent hover:ring-gray-200 dark:hover:ring-gray-700"
+          title="上传图片"
+        >
+          <Plus className="w-3.5 h-3.5 text-gray-400 group-hover:text-gray-500 dark:group-hover:text-gray-300" />
+          添加附件
         </button>
       </div>
 
@@ -530,13 +539,6 @@ export function InputArea() {
           ref={fileInputRef}
           onChange={handleFileSelect}
         />
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          className="p-2 rounded-lg shrink-0 text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300 transition-colors self-end"
-          title="上传图片"
-        >
-          <Plus className="w-5 h-5" />
-        </button>
 
         <textarea
           ref={textareaRef}
