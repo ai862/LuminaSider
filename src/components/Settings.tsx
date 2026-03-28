@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useStore, ApiProvider, defaultProviderConfigs } from '../store';
-import { Save, ArrowLeft, RefreshCw } from 'lucide-react';
+import { useStore, ApiProvider, ThemeMode, defaultProviderConfigs } from '../store';
+import { Save, ArrowLeft, RefreshCw, Sun, Moon, Monitor } from 'lucide-react';
 
 interface ModelInfo {
   name: string;
@@ -8,7 +8,7 @@ interface ModelInfo {
 }
 
 export function Settings() {
-  const { apiProvider, providerConfigs, setSettings, setActiveProvider, setIsSettingsOpen } = useStore();
+  const { apiProvider, providerConfigs, setSettings, setActiveProvider, setIsSettingsOpen, theme, setTheme } = useStore();
   const [localApiProvider, setLocalApiProvider] = useState<string>(apiProvider || 'gemini');
   
   // Initialize local state with the config of the currently selected provider, fallback to default if missing
@@ -248,6 +248,30 @@ export function Settings() {
       </header>
 
       <main className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="space-y-3">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            外观设置
+          </label>
+          <div className="flex p-1 bg-gray-100 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
+            {(['light', 'dark', 'system'] as ThemeMode[]).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTheme(t)}
+                className={`flex-1 flex items-center justify-center gap-2 py-1.5 text-sm font-medium rounded-md transition-all ${
+                  theme === t
+                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                {t === 'light' && <Sun className="w-4 h-4" />}
+                {t === 'dark' && <Moon className="w-4 h-4" />}
+                {t === 'system' && <Monitor className="w-4 h-4" />}
+                {t === 'light' ? '浅色' : t === 'dark' ? '深色' : '跟随系统'}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="space-y-2">
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
             API 提供商

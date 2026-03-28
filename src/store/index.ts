@@ -83,6 +83,7 @@ export const deleteAttachmentBlob = async (attachmentId: string): Promise<void> 
 // --- App State (Zustand) ---
 
 export type ApiProvider = 'gemini' | 'openai' | 'deepseek' | 'groq' | 'ollama' | 'anthropic';
+export type ThemeMode = 'light' | 'dark' | 'system';
 
 export interface ProviderConfig {
   apiKey: string;
@@ -96,6 +97,8 @@ interface AppState {
   providerConfigs: Record<ApiProvider, ProviderConfig>;
   setSettings: (provider: ApiProvider, config: Partial<ProviderConfig>) => void;
   setActiveProvider: (provider: ApiProvider) => void;
+  theme: ThemeMode;
+  setTheme: (theme: ThemeMode) => void;
 
   // UI State
   isSettingsOpen: boolean;
@@ -174,6 +177,8 @@ export const useStore = create<AppState>()(
           }
         }
       })),
+      theme: 'system',
+      setTheme: (theme) => set({ theme }),
 
       // UI State
       isSettingsOpen: false,
@@ -362,6 +367,7 @@ export const useStore = create<AppState>()(
         return {
           apiProvider: state.apiProvider,
           providerConfigs,
+          theme: state.theme || 'system',
           useContext: state.useContext,
           sessions: state.sessions,
           currentSessionId: state.currentSessionId,
