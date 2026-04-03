@@ -17,24 +17,28 @@ const PBKDF2_ITERATIONS = 100000;
 // Check if session storage is available (Chrome 102+, Firefox MV3)
 const hasSessionStorage = typeof chrome !== 'undefined' && chrome.storage && 'session' in chrome.storage;
 
-// Check if we're in Firefox
+// Check if we're in Firefox sidebar (sidebar context has limited API access)
 const isFirefox = typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('firefox');
+
+// Firefox sidebar has chrome.storage.local but it doesn't work correctly
+// We need to proxy all storage through background script
+const isFirefoxSidebar = isFirefox && typeof chrome !== 'undefined' && chrome.runtime?.id && !chrome.tabs;
 
 // Helper function to access storage (works in Firefox sidebar via background script)
 async function storageGet(keys: string | string[]): Promise<Record<string, any>> {
-  if (isFirefox && !chrome.storage?.local) {
-    // Firefox sidebar: use background script
+  if (isFirefoxSidebar) {
+    // Firefox sidebar: always use background script
     const response = await chrome.runtime.sendMessage({ action: 'STORAGE_GET', keys });
     return response?.result || {};
   }
-  // Direct access
+  // Direct access (Chrome or Firefox background)
   const result = await chrome.storage.local.get(keys);
   return result || {};
 }
 
 async function storageSet(data: Record<string, any>): Promise<void> {
-  if (isFirefox && !chrome.storage?.local) {
-    // Firefox sidebar: use background script
+  if (isFirefoxSidebar) {
+    // Firefox sidebar: always use background script
     await chrome.runtime.sendMessage({ action: 'STORAGE_SET', data });
     return;
   }
@@ -42,8 +46,8 @@ async function storageSet(data: Record<string, any>): Promise<void> {
 }
 
 async function storageRemove(keys: string | string[]): Promise<void> {
-  if (isFirefox && !chrome.storage?.local) {
-    // Firefox sidebar: use background script
+  if (isFirefoxSidebar) {
+    // Firefox sidebar: always use background script
     await chrome.runtime.sendMessage({ action: 'STORAGE_REMOVE', keys });
     return;
   }
@@ -56,6 +60,8 @@ export class SecureStorage {
   private static isUnlocked: boolean = false;
   // 内存中的主密码（Firefox MV2 兼容）
   private static memoryPassword: string | null = null;
+  // Firefox: 使用 local storage 持久化主密码（安全性较低但方便）
+  private static firefoxPasswordKey = '_firefoxMasterPassword';
 
   // ==================== 核心加密/解密方法 ====================
 
@@ -202,12 +208,8 @@ export class SecureStorage {
       const testEncrypted = await this.encryptData('luminasider-test', password);
       await storageSet({ passwordTestKey: testEncrypted });
 
-      // 存储密码到 session storage 或内存
-      if (hasSessionStorage) {
-        await (chrome.storage as any).session.set({ masterPassword: password });
-      } else {
-        this.memoryPassword = password;
-      }
+      // 存储密码
+      await this.saveMasterPassword(password);
 
       return { success: true };
     } catch {
@@ -244,12 +246,8 @@ export class SecureStorage {
       // 解锁成功
       this.isUnlocked = true;
 
-      // 存储密码到 session storage 或内存
-      if (hasSessionStorage) {
-        await (chrome.storage as any).session.set({ masterPassword: password });
-      } else {
-        this.memoryPassword = password;
-      }
+      // 存储密码
+      await this.saveMasterPassword(password);
 
       return { success: true };
     } catch {
@@ -263,11 +261,9 @@ export class SecureStorage {
   static async lock(): Promise<void> {
     this.sessionCache.clear();
     this.isUnlocked = false;
-    this.memoryPassword = null;
 
-    if (hasSessionStorage) {
-      await (chrome.storage as any).session.remove('masterPassword');
-    }
+    // 清除存储的主密码
+    await this.clearMasterPassword();
   }
 
   /**
@@ -276,14 +272,8 @@ export class SecureStorage {
   static async checkUnlocked(): Promise<boolean> {
     if (this.isUnlocked) return true;
 
-    // 尝试从 session storage 或内存恢复
-    let masterPassword: string | undefined;
-    if (hasSessionStorage) {
-      const result = await (chrome.storage as any).session.get('masterPassword');
-      masterPassword = result?.masterPassword;
-    } else {
-      masterPassword = this.memoryPassword || undefined;
-    }
+    // 尝试从存储恢复主密码
+    const masterPassword = await this.getMasterPassword();
 
     if (masterPassword) {
       this.isUnlocked = true;
@@ -302,13 +292,44 @@ export class SecureStorage {
       return this.memoryPassword;
     }
 
-    // 尝试从 session storage 获取
+    // 尝试从 session storage 获取 (Chrome)
     if (hasSessionStorage) {
       const result = await (chrome.storage as any).session.get('masterPassword');
       return result?.masterPassword || null;
     }
 
+    // Firefox: 从 local storage 获取
+    if (isFirefoxSidebar) {
+      const result = await storageGet(this.firefoxPasswordKey);
+      return result?.[this.firefoxPasswordKey] || null;
+    }
+
     return null;
+  }
+
+  /**
+   * 存储主密码（内部方法）
+   */
+  private static async saveMasterPassword(password: string): Promise<void> {
+    if (hasSessionStorage) {
+      await (chrome.storage as any).session.set({ masterPassword: password });
+    } else if (isFirefoxSidebar) {
+      // Firefox: 使用 local storage 持久化（安全性较低但方便）
+      await storageSet({ [this.firefoxPasswordKey]: password });
+    }
+    this.memoryPassword = password;
+  }
+
+  /**
+   * 清除存储的主密码
+   */
+  private static async clearMasterPassword(): Promise<void> {
+    this.memoryPassword = null;
+    if (hasSessionStorage) {
+      await (chrome.storage as any).session.remove('masterPassword');
+    } else if (isFirefoxSidebar) {
+      await storageRemove(this.firefoxPasswordKey);
+    }
   }
 
   /**
