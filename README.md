@@ -1,6 +1,8 @@
 # LuminaSider 🌟
 
-LuminaSider 是一款基于 Chrome 浏览器扩展 (Manifest V3) 的侧边栏 AI 助手。它打破了传统 AI 助手需要频繁切换标签页的体验，在用户当前浏览的网页旁注入一个侧边栏，提供“伴随式浏览”与“基于当前网页上下文的精准问答”能力。
+LuminaSider 是一款支持 **Chrome** 和 **Firefox** 浏览器的侧边栏 AI 助手。它打破了传统 AI 助手需要频繁切换标签页的体验，在用户当前浏览的网页旁注入一个侧边栏，提供”伴随式浏览”与”基于当前网页上下文的精准问答”能力。
+
+> **Chrome** 使用 Manifest V3，**Firefox** 使用 Manifest V2，同一套源码构建两个版本。
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/vancur2021/LuminaSider/main/images/%E6%95%88%E6%9E%9C1.png" alt="LuminaSider 效果图 1" width="800">
@@ -24,15 +26,32 @@ LuminaSider 是一款基于 Chrome 浏览器扩展 (Manifest V3) 的侧边栏 AI
 
 ## 🚀 安装指南 (Installation)
 
-### 方式一：直接安装（普通用户）
+### Chrome 浏览器
+
+#### 方式一：直接安装（普通用户）
 1. 在 GitHub Releases 页面下载最新的 `luminasider-extension.zip` 压缩包并解压。
 2. 打开 Chrome 浏览器，在地址栏输入 `chrome://extensions/` 并回车。
-3. 在右上角开启 **“开发者模式” (Developer mode)**。
-4. 点击左上角的 **“加载已解压的扩展程序” (Load unpacked)**。
+3. 在右上角开启 **”开发者模式” (Developer mode)**。
+4. 点击左上角的 **”加载已解压的扩展程序” (Load unpacked)**。
 5. 选择解压后的文件夹即可。
 6. 建议将插件固定 (Pin) 在浏览器右上角，方便随时唤出。
 
-### 方式二：本地开发构建（开发者）
+### Firefox 浏览器
+
+#### 方式一：直接安装（普通用户）
+1. 在 GitHub Releases 页面下载最新的 `luminasider-firefox.xpi` 文件。
+2. 打开 Firefox，在地址栏输入 `about:addons` 并回车。
+3. 点击齿轮图标 → **”从文件安装附加组件”**。
+4. 选择下载的 `.xpi` 文件。
+
+#### 方式二：临时加载（开发测试）
+1. 下载 `luminasider-firefox.xpi` 并解压，或构建 `dist-firefox` 目录。
+2. 打开 Firefox，访问 `about:debugging#/runtime/this-firefox`。
+3. 点击 **”临时载入附加组件”**。
+4. 选择 `dist-firefox/manifest.json` 文件。
+5. 点击浏览器工具栏的 LuminaSider 图标，或按 `Ctrl+B` 打开侧边栏。
+
+### 本地开发构建（开发者）
 确保你的电脑已安装 Node.js (推荐 v18+)。
 
 ```bash
@@ -43,16 +62,18 @@ cd LuminaSider
 # 2. 安装依赖
 npm install
 
-# 3. 启动开发服务器 (支持热更新 HMR)
+# 3. 启动开发服务器 (支持热更新 HMR) - Chrome
 npm run dev
 
 # 4. 构建生产版本
-npm run build
+npm run build          # Chrome 版本 → dist/
+npm run build:firefox  # Firefox 版本 → dist-firefox/
 
-# 5. 打包为 zip 文件 (用于发布)
-npm run pack
+# 5. 打包为发布文件
+npm run pack           # Chrome → luminasider-extension.zip
+npm run pack:firefox   # Firefox → luminasider-firefox.xpi
 ```
-*开发时，将 `dist` 目录作为“已解压的扩展程序”加载到 Chrome 中即可。*
+*开发时，将 `dist` (Chrome) 或 `dist-firefox` (Firefox) 目录作为”已解压的扩展程序”加载到浏览器中即可。*
 
 ## ⚙️ 配置与使用 (Usage)
 
