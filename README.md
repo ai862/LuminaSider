@@ -38,18 +38,21 @@ LuminaSider 是一款支持 **Chrome** 和 **Firefox** 浏览器的侧边栏 AI 
 
 ### Firefox 浏览器
 
-#### 方式一：直接安装（普通用户）
-1. 在 GitHub Releases 页面下载最新的 `luminasider-firefox.xpi` 文件。
-2. 打开 Firefox，在地址栏输入 `about:addons` 并回车。
-3. 点击齿轮图标 → **”从文件安装附加组件”**。
-4. 选择下载的 `.xpi` 文件。
+> ⚠️ **注意**：由于 Firefox 扩展未上架 Mozilla Add-ons (AMO)，普通版 Firefox 无法直接安装未签名扩展。请使用以下方式：
 
-#### 方式二：临时加载（开发测试）
-1. 下载 `luminasider-firefox.xpi` 并解压，或构建 `dist-firefox` 目录。
-2. 打开 Firefox，访问 `about:debugging#/runtime/this-firefox`。
-3. 点击 **”临时载入附加组件”**。
-4. 选择 `dist-firefox/manifest.json` 文件。
-5. 点击浏览器工具栏的 LuminaSider 图标，或按 `Ctrl+B` 打开侧边栏。
+#### 方式一：使用 Firefox Developer Edition（推荐）
+1. 下载并安装 [Firefox Developer Edition](https://www.mozilla.org/firefox/developer/)
+2. 打开浏览器，地址栏输入 `about:config`，确认风险提示
+3. 搜索 `xpinstall.signatures.required`，双击设置为 `false`
+4. 下载 `luminasider-firefox.xpi`，直接拖拽到浏览器安装
+
+#### 方式二：临时加载（所有 Firefox 版本）
+> 注意：临时加载的扩展在浏览器重启后会失效，需要重新加载
+1. 在 GitHub Releases 页面下载 `luminasider-firefox.xpi` 并解压
+2. 打开 Firefox，访问 `about:debugging#/runtime/this-firefox`
+3. 点击 **”临时载入附加组件”**
+4. 选择解压目录中的 `manifest.json` 文件
+5. 点击浏览器工具栏的 LuminaSider 图标打开侧边栏
 
 ### 本地开发构建（开发者）
 确保你的电脑已安装 Node.js (推荐 v18+)。
