@@ -1,43 +1,45 @@
-name: Build and Release Chrome Extension
+name: Build and Release
 
 on:
-  release:
-    types: [published]
-
-permissions:
-  contents: write
+  push:
+    tags:
+      - 'v*'
 
 jobs:
-  build-and-release:
+  build:
     runs-on: ubuntu-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-    
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4.1.0
+        uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build extension
+      - name: Build Chrome extension
         run: npm run build
 
-      - name: Package extension
-        run: |
-          cd dist
-          zip -r ../luminasider-extension.zip *
-          cd ..
+      - name: Pack Chrome extension
+        run: cd dist && zip -r ../luminasider-chrome.zip *
 
-      - name: Upload Release Asset
-        uses: softprops/action-gh-release@v2
+      - name: Build Firefox extension
+        run: npm run build:firefox
+
+      - name: Pack Firefox extension
+        run: cd dist-firefox && zip -r ../luminasider-firefox.xpi *
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
         with:
-          files: luminasider-extension.zip
+          files: |
+            luminasider-chrome.zip
+            luminasider-firefox.xpi
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

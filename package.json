@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "pack": "npm run build && cd dist && zip -r ../luminasider-extension.zip *",
     "build:firefox": "tsc --noEmit && vite build --config vite.config.firefox.ts && node scripts/build-firefox.js",
+    "build:all": "npm run build && npm run build:firefox",
     "pack:firefox": "npm run build:firefox && cd dist-firefox && zip -r ../luminasider-firefox.xpi *"
   },
   "dependencies": {
