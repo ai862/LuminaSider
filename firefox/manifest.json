@@ -1,0 +1,51 @@
+{
+  "manifest_version": 2,
+  "name": "LuminaSider",
+  "version": "1.0.0",
+  "description": "Firefox 侧边栏 AI 助手",
+  "permissions": [
+    "storage",
+    "unlimitedStorage",
+    "activeTab",
+    "tabs",
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": ["assets/background.js"],
+    "persistent": false
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["assets/content.js"]
+    }
+  ],
+  "browser_action": {
+    "default_title": "打开 LuminaSider",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "sidebar_action": {
+    "default_title": "LuminaSider",
+    "default_panel": "index.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "luminasider@extension.firefox",
+      "strict_min_version": "78.0"
+    }
+  }
+}

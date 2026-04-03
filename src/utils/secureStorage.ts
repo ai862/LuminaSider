@@ -14,10 +14,48 @@ const SALT_LENGTH = 16;
 const IV_LENGTH = 12;
 const PBKDF2_ITERATIONS = 100000;
 
+// Check if session storage is available (Chrome 102+, Firefox MV3)
+const hasSessionStorage = typeof chrome !== 'undefined' && chrome.storage && 'session' in chrome.storage;
+
+// Check if we're in Firefox
+const isFirefox = typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('firefox');
+
+// Helper function to access storage (works in Firefox sidebar via background script)
+async function storageGet(keys: string | string[]): Promise<Record<string, any>> {
+  if (isFirefox && !chrome.storage?.local) {
+    // Firefox sidebar: use background script
+    const response = await chrome.runtime.sendMessage({ action: 'STORAGE_GET', keys });
+    return response?.result || {};
+  }
+  // Direct access
+  const result = await chrome.storage.local.get(keys);
+  return result || {};
+}
+
+async function storageSet(data: Record<string, any>): Promise<void> {
+  if (isFirefox && !chrome.storage?.local) {
+    // Firefox sidebar: use background script
+    await chrome.runtime.sendMessage({ action: 'STORAGE_SET', data });
+    return;
+  }
+  await chrome.storage.local.set(data);
+}
+
+async function storageRemove(keys: string | string[]): Promise<void> {
+  if (isFirefox && !chrome.storage?.local) {
+    // Firefox sidebar: use background script
+    await chrome.runtime.sendMessage({ action: 'STORAGE_REMOVE', keys });
+    return;
+  }
+  await chrome.storage.local.remove(keys);
+}
+
 export class SecureStorage {
   // 内存会话缓存
   private static sessionCache: Map<string, string> = new Map();
   private static isUnlocked: boolean = false;
+  // 内存中的主密码（Firefox MV2 兼容）
+  private static memoryPassword: string | null = null;
 
   // ==================== 核心加密/解密方法 ====================
 
@@ -136,8 +174,13 @@ export class SecureStorage {
    * 检查是否已设置主密码
    */
   static async hasMasterPassword(): Promise<boolean> {
-    const { masterPasswordHash } = await chrome.storage.local.get('masterPasswordHash');
-    return !!masterPasswordHash;
+    try {
+      const result = await storageGet('masterPasswordHash');
+      return !!result?.masterPasswordHash;
+    } catch (error) {
+      console.error('[SecureStorage] hasMasterPassword error:', error);
+      return false;
+    }
   }
 
   /**
@@ -150,17 +193,21 @@ export class SecureStorage {
 
     try {
       const hash = await this.hashPassword(password);
-      await chrome.storage.local.set({ masterPasswordHash: hash });
+      await storageSet({ masterPasswordHash: hash });
 
       // 立即解锁会话
       this.isUnlocked = true;
 
       // 加密存储一个测试值以验证密码
       const testEncrypted = await this.encryptData('luminasider-test', password);
-      await chrome.storage.local.set({ passwordTestKey: testEncrypted });
+      await storageSet({ passwordTestKey: testEncrypted });
 
-      // 将密码暂存到 session storage
-      await chrome.storage.session.set({ masterPassword: password });
+      // 存储密码到 session storage 或内存
+      if (hasSessionStorage) {
+        await (chrome.storage as any).session.set({ masterPassword: password });
+      } else {
+        this.memoryPassword = password;
+      }
 
       return { success: true };
     } catch {
@@ -173,10 +220,8 @@ export class SecureStorage {
    */
   static async unlock(password: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const { masterPasswordHash, passwordTestKey } = await chrome.storage.local.get([
-        'masterPasswordHash',
-        'passwordTestKey'
-      ]);
+      const result = await storageGet(['masterPasswordHash', 'passwordTestKey']);
+      const { masterPasswordHash, passwordTestKey } = result || {};
 
       if (!masterPasswordHash) {
         return { success: false, error: '未设置主密码，请先设置' };
@@ -199,8 +244,12 @@ export class SecureStorage {
       // 解锁成功
       this.isUnlocked = true;
 
-      // 将密码暂存到 session storage（会话级，浏览器关闭自动清除）
-      await chrome.storage.session.set({ masterPassword: password });
+      // 存储密码到 session storage 或内存
+      if (hasSessionStorage) {
+        await (chrome.storage as any).session.set({ masterPassword: password });
+      } else {
+        this.memoryPassword = password;
+      }
 
       return { success: true };
     } catch {
@@ -214,7 +263,11 @@ export class SecureStorage {
   static async lock(): Promise<void> {
     this.sessionCache.clear();
     this.isUnlocked = false;
-    await chrome.storage.session.remove('masterPassword');
+    this.memoryPassword = null;
+
+    if (hasSessionStorage) {
+      await (chrome.storage as any).session.remove('masterPassword');
+    }
   }
 
   /**
@@ -223,14 +276,39 @@ export class SecureStorage {
   static async checkUnlocked(): Promise<boolean> {
     if (this.isUnlocked) return true;
 
-    // 尝试从 session storage 恢复
-    const { masterPassword } = await chrome.storage.session.get('masterPassword');
+    // 尝试从 session storage 或内存恢复
+    let masterPassword: string | undefined;
+    if (hasSessionStorage) {
+      const result = await (chrome.storage as any).session.get('masterPassword');
+      masterPassword = result?.masterPassword;
+    } else {
+      masterPassword = this.memoryPassword || undefined;
+    }
+
     if (masterPassword) {
       this.isUnlocked = true;
       return true;
     }
 
     return false;
+  }
+
+  /**
+   * 获取存储的主密码
+   */
+  private static async getMasterPassword(): Promise<string | null> {
+    // 优先从内存获取
+    if (this.memoryPassword) {
+      return this.memoryPassword;
+    }
+
+    // 尝试从 session storage 获取
+    if (hasSessionStorage) {
+      const result = await (chrome.storage as any).session.get('masterPassword');
+      return result?.masterPassword || null;
+    }
+
+    return null;
   }
 
   /**
@@ -247,10 +325,9 @@ export class SecureStorage {
 
     try {
       // 获取密码
-      let masterPwd: string | undefined = password;
+      let masterPwd: string | undefined | null = password;
       if (!masterPwd) {
-        const { masterPassword } = await chrome.storage.session.get('masterPassword');
-        masterPwd = masterPassword;
+        masterPwd = await this.getMasterPassword();
       }
 
       if (!masterPwd) {
@@ -261,15 +338,17 @@ export class SecureStorage {
       const encrypted = await this.encryptData(apiKey, masterPwd);
 
       // 存储
-      const { encryptedApiKeys = {} } = await chrome.storage.local.get('encryptedApiKeys');
+      const result = await storageGet('encryptedApiKeys');
+      const encryptedApiKeys = result?.encryptedApiKeys || {};
       encryptedApiKeys[provider] = encrypted;
-      await chrome.storage.local.set({ encryptedApiKeys });
+      await storageSet({ encryptedApiKeys });
 
       // 更新内存缓存
       this.sessionCache.set(provider, apiKey);
 
       return { success: true };
-    } catch {
+    } catch (error) {
+      console.error('[SecureStorage] storeApiKey error:', error);
       return { success: false, error: '存储失败' };
     }
   }
@@ -293,13 +372,14 @@ export class SecureStorage {
 
     try {
       // 获取密码
-      const { masterPassword } = await chrome.storage.session.get('masterPassword');
+      const masterPassword = await this.getMasterPassword();
       if (!masterPassword) {
         return null;
       }
 
       // 获取加密的 API Key
-      const { encryptedApiKeys = {} } = await chrome.storage.local.get('encryptedApiKeys');
+      const result = await storageGet('encryptedApiKeys');
+      const encryptedApiKeys = result?.encryptedApiKeys || {};
       const encrypted = encryptedApiKeys[provider];
 
       if (!encrypted) {
@@ -314,7 +394,7 @@ export class SecureStorage {
 
       return apiKey;
     } catch (error) {
-      console.error('获取 API Key 失败:', error);
+      console.error('[SecureStorage] getApiKey error:', error);
       return null;
     }
   }
@@ -327,9 +407,10 @@ export class SecureStorage {
     this.sessionCache.delete(provider);
 
     // 清除存储
-    const { encryptedApiKeys = {} } = await chrome.storage.local.get('encryptedApiKeys');
+    const result = await storageGet('encryptedApiKeys');
+    const encryptedApiKeys = result?.encryptedApiKeys || {};
     delete encryptedApiKeys[provider];
-    await chrome.storage.local.set({ encryptedApiKeys });
+    await storageSet({ encryptedApiKeys });
   }
 
   /**
@@ -345,8 +426,8 @@ export class SecureStorage {
 
     try {
       // 验证旧密码
-      const { masterPasswordHash, encryptedApiKeys = {} } =
-        await chrome.storage.local.get(['masterPasswordHash', 'encryptedApiKeys']);
+      const result = await storageGet(['masterPasswordHash', 'encryptedApiKeys']);
+      const { masterPasswordHash, encryptedApiKeys = {} } = result || {};
 
       const oldHash = await this.hashPassword(oldPassword);
       if (oldHash !== masterPasswordHash) {
@@ -365,14 +446,18 @@ export class SecureStorage {
       const newTestKey = await this.encryptData('luminasider-test', newPassword);
 
       // 批量保存
-      await chrome.storage.local.set({
+      await storageSet({
         masterPasswordHash: newHash,
         encryptedApiKeys: newEncryptedKeys,
         passwordTestKey: newTestKey
       });
 
       // 更新会话
-      await chrome.storage.session.set({ masterPassword: newPassword });
+      if (hasSessionStorage) {
+        await (chrome.storage as any).session.set({ masterPassword: newPassword });
+      } else {
+        this.memoryPassword = newPassword;
+      }
 
       return { success: true };
     } catch {
@@ -384,8 +469,8 @@ export class SecureStorage {
    * 获取所有已存储密钥的提供商标识（不含实际密钥）
    */
   static async getStoredProviders(): Promise<string[]> {
-    const { encryptedApiKeys = {} } = await chrome.storage.local.get('encryptedApiKeys');
-    return Object.keys(encryptedApiKeys);
+    const result = await storageGet('encryptedApiKeys');
+    return Object.keys(result?.encryptedApiKeys || {});
   }
 
   /**
@@ -394,13 +479,13 @@ export class SecureStorage {
   static async clearAll(): Promise<void> {
     this.sessionCache.clear();
     this.isUnlocked = false;
+    this.memoryPassword = null;
 
-    await chrome.storage.local.remove([
-      'masterPasswordHash',
-      'encryptedApiKeys',
-      'passwordTestKey'
-    ]);
-    await chrome.storage.session.remove('masterPassword');
+    await storageRemove(['masterPasswordHash', 'encryptedApiKeys', 'passwordTestKey']);
+
+    if (hasSessionStorage) {
+      await (chrome.storage as any).session.remove('masterPassword');
+    }
   }
 }
 

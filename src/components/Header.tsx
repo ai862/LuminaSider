@@ -28,53 +28,155 @@ export function Header() {
 
   const extractContext = useCallback(async () => {
     try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      // Detect Firefox by checking the user agent
+      const isFirefox = navigator.userAgent.toLowerCase().includes('firefox');
+      console.log('[LuminaSider] Browser detected:', isFirefox ? 'Firefox' : 'Chrome');
+
+      // Get active tab - always use background script for Firefox
+      let tab: chrome.tabs.Tab | undefined;
+
+      if (isFirefox) {
+        // Firefox: Always use background script to get the active tab
+        // Use callback-style for better Firefox compatibility
+        console.log('[LuminaSider] Requesting active tab from background...');
+
+        const response = await new Promise<any>((resolve) => {
+          const timeout = setTimeout(() => {
+            console.log('[LuminaSider] sendMessage timeout - no response');
+            resolve(null);
+          }, 5000);
+
+          (chrome as any).runtime.sendMessage(
+            { action: 'GET_ACTIVE_TAB' },
+            (response: any) => {
+              clearTimeout(timeout);
+              console.log('[LuminaSider] sendMessage callback received:', response);
+              if (chrome.runtime.lastError) {
+                console.log('[LuminaSider] runtime.lastError:', chrome.runtime.lastError);
+                resolve(null);
+              } else {
+                resolve(response);
+              }
+            }
+          );
+        });
+
+        console.log('[LuminaSider] Background response:', response);
+
+        if (response && response.tab) {
+          tab = response.tab;
+          console.log('[LuminaSider] Got tab from background:', tab?.url);
+        } else if (response && response.error) {
+          console.log('[LuminaSider] Background error:', response.error);
+        }
+      } else {
+        // Chrome: Simple query
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        tab = tabs[0];
+      }
 
       // Skip restricted URLs
-      if (!tab || !tab.id || !tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('edge://') || tab.url.startsWith('about:')) {
+      if (!tab || !tab.id || !tab.url ||
+          tab.url.startsWith('chrome://') ||
+          tab.url.startsWith('edge://') ||
+          tab.url.startsWith('about:') ||
+          tab.url.startsWith('moz-extension://') ||
+          tab.url.startsWith('chrome-extension://')) {
+        console.log('[LuminaSider] Skipping restricted URL:', tab?.url);
         setPageContext(null);
         return;
       }
 
-      const results = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: () => {
-          return {
-            html: document.documentElement.outerHTML,
-            title: document.title,
-            url: window.location.href
-          };
-        }
-      });
+      console.log('[LuminaSider] Extracting content from:', tab.url);
 
-      if (results && results[0] && results[0].result) {
-        const { html, title, url } = results[0].result;
+      if (isFirefox) {
+        // Firefox MV2: Use background script to extract content with callback style
+        console.log('[LuminaSider] Sending EXTRACT_CONTENT_BG to background');
 
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
+        const response = await new Promise<any>((resolve) => {
+          const timeout = setTimeout(() => {
+            console.log('[LuminaSider] Content extraction timeout');
+            resolve(null);
+          }, 10000);
 
-        const reader = new Readability(doc);
-        const article = reader.parse();
+          (chrome as any).runtime.sendMessage(
+            {
+              action: 'EXTRACT_CONTENT_BG',
+              tabId: tab.id
+            },
+            (response: any) => {
+              clearTimeout(timeout);
+              console.log('[LuminaSider] Content extraction callback received:', response);
+              if (chrome.runtime.lastError) {
+                console.log('[LuminaSider] Content extraction lastError:', chrome.runtime.lastError);
+                resolve(null);
+              } else {
+                resolve(response);
+              }
+            }
+          );
+        });
 
-        if (article && article.textContent && article.textContent.trim().length > 0) {
-          setPageContext({
-            title: article.title || title,
-            content: article.textContent,
-            url: url
-          });
+        console.log('[LuminaSider] Response from background:', response);
+
+        if (response && !response.error) {
+          const { title, url, content } = response;
+          if (content && content.trim().length > 0) {
+            setPageContext({
+              title: title,
+              content: content,
+              url: url
+            });
+          } else {
+            console.log('[LuminaSider] Empty content');
+            setPageContext(null);
+          }
         } else {
-          // Fallback
-          setPageContext({
-            title: title,
-            content: doc.body?.textContent || '',
-            url: url
-          });
+          console.log('[LuminaSider] Error in response:', response?.error);
+          setPageContext(null);
         }
       } else {
-        setPageContext(null);
+        // Chrome: Use scripting API
+        const results = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: () => {
+            return {
+              html: document.documentElement.outerHTML,
+              title: document.title,
+              url: window.location.href
+            };
+          }
+        });
+
+        if (results && results[0] && results[0].result) {
+          const { html, title, url } = results[0].result;
+
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(html, 'text/html');
+
+          const reader = new Readability(doc);
+          const article = reader.parse();
+
+          if (article && article.textContent && article.textContent.trim().length > 0) {
+            setPageContext({
+              title: article.title || title,
+              content: article.textContent,
+              url: url
+            });
+          } else {
+            // Fallback
+            setPageContext({
+              title: title,
+              content: doc.body?.textContent || '',
+              url: url
+            });
+          }
+        } else {
+          setPageContext(null);
+        }
       }
     } catch (error) {
-      console.error('Failed to extract context:', error);
+      console.error('[LuminaSider] Failed to extract context:', error);
       setPageContext(null);
     }
   }, [setPageContext]);

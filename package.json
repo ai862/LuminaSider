@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "pack": "npm run build && cd dist && zip -r ../luminasider-extension.zip *"
+    "pack": "npm run build && cd dist && zip -r ../luminasider-extension.zip *",
+    "build:firefox": "tsc --noEmit && vite build --config vite.config.firefox.ts && node scripts/build-firefox.js",
+    "pack:firefox": "npm run build:firefox && cd dist-firefox && zip -r ../luminasider-firefox.xpi *"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

@@ -528,7 +528,7 @@ export function ChatArea() {
                     ))}
                   </div>
                 )}
-                <div className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</div>
+                <div className="whitespace-pre-wrap text-sm leading-relaxed select-text">{msg.content}</div>
               </>
             ) : (
               <div className="w-full overflow-hidden">
@@ -578,7 +578,7 @@ export function ChatArea() {
                 )}
 
                 {/* Main Content */}
-                <div className="prose prose-sm dark:prose-invert max-w-none w-full
+                <div className="prose prose-sm dark:prose-invert max-w-none w-full select-text
                   prose-p:leading-relaxed prose-p:my-1.5
                   prose-headings:my-2 prose-headings:font-semibold
                   prose-ul:my-1.5 prose-li:my-0.5

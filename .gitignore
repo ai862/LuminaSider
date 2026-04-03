@@ -114,7 +114,9 @@ dist
 # Vite output
 dist/
 dist-ssr/
+dist-firefox/
 *.local
+*.xpi
 
 # Editor directories and files
 .vscode/*
