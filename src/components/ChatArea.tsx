@@ -91,9 +91,9 @@ const CodeBlock = ({ className, children, node, ...props }: any) => {
         </div>
         <div className="p-3 overflow-x-auto bg-[#0d1117] w-full max-w-full">
           <pre className="!bg-transparent !p-0 !m-0 w-full inline-block">
-            <code 
-              className="font-mono text-[13px] leading-relaxed text-gray-300 hljs !bg-transparent !p-0 block min-w-full"
-              dangerouslySetInnerHTML={{ __html: highlightedCode }} 
+            <code
+              className="font-mono text-[13px] leading-relaxed hljs !bg-transparent !p-0 block min-w-full"
+              dangerouslySetInnerHTML={{ __html: highlightedCode }}
             />
           </pre>
         </div>
