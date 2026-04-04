@@ -11,7 +11,11 @@ if (!isFirefox && chrome.sidePanel) {
 // Firefox: Click browser action to open sidebar
 if (isFirefox) {
   (chrome as any).browserAction.onClicked.addListener(() => {
-    (chrome as any).sidebarAction.open().catch((error: any) => console.error(error));
+    const result = (chrome as any).sidebarAction.open();
+    // sidebarAction.open() may return undefined in some Firefox versions
+    if (result && typeof result.catch === 'function') {
+      result.catch((error: any) => console.error(error));
+    }
   });
 }
 
@@ -128,25 +132,44 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   }
 
   // Storage operations - proxy for Firefox sidebar
+  // Firefox MV2: Use sendResponse callback for proper async handling
   if (request.action === 'STORAGE_GET') {
-    chrome.storage.local.get(request.keys, (result) => {
-      sendResponse({ result });
+    console.log('[LuminaSider BG] STORAGE_GET, keys:', request.keys);
+    const storage = (globalThis as any).browser?.storage?.local || chrome.storage.local;
+    storage.get(request.keys).then((result: any) => {
+      console.log('[LuminaSider BG] STORAGE_GET result:', result);
+      sendResponse({ result: result || {} });
+    }).catch((error: any) => {
+      console.error('[LuminaSider BG] STORAGE_GET error:', error);
+      sendResponse({ result: {} });
     });
-    return true;
+    return true; // Keep channel open for async response
   }
 
   if (request.action === 'STORAGE_SET') {
-    chrome.storage.local.set(request.data, () => {
+    console.log('[LuminaSider BG] STORAGE_SET, data keys:', Object.keys(request.data || {}));
+    const storage = (globalThis as any).browser?.storage?.local || chrome.storage.local;
+    storage.set(request.data).then(() => {
+      console.log('[LuminaSider BG] STORAGE_SET completed');
       sendResponse({ success: true });
+    }).catch((error: any) => {
+      console.error('[LuminaSider BG] STORAGE_SET error:', error);
+      sendResponse({ success: false, error: String(error) });
     });
-    return true;
+    return true; // Keep channel open for async response
   }
 
   if (request.action === 'STORAGE_REMOVE') {
-    chrome.storage.local.remove(request.keys, () => {
+    console.log('[LuminaSider BG] STORAGE_REMOVE, keys:', request.keys);
+    const storage = (globalThis as any).browser?.storage?.local || chrome.storage.local;
+    storage.remove(request.keys).then(() => {
+      console.log('[LuminaSider BG] STORAGE_REMOVE completed');
       sendResponse({ success: true });
+    }).catch((error: any) => {
+      console.error('[LuminaSider BG] STORAGE_REMOVE error:', error);
+      sendResponse({ success: false, error: String(error) });
     });
-    return true;
+    return true; // Keep channel open for async response
   }
 
   return false;

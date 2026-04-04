@@ -17,41 +17,178 @@ const PBKDF2_ITERATIONS = 100000;
 // Check if session storage is available (Chrome 102+, Firefox MV3)
 const hasSessionStorage = typeof chrome !== 'undefined' && chrome.storage && 'session' in chrome.storage;
 
-// Check if we're in Firefox sidebar (sidebar context has limited API access)
+// Check if we're in Firefox
 const isFirefox = typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('firefox');
 
-// Firefox sidebar has chrome.storage.local but it doesn't work correctly
-// We need to proxy all storage through background script
-const isFirefoxSidebar = isFirefox && typeof chrome !== 'undefined' && chrome.runtime?.id && !chrome.tabs;
+// Check if we're in a Firefox sidebar context
+// In Firefox sidebar, chrome.tabs exists but doesn't work properly
+// We detect this by checking if we're in an extension page (not background) on Firefox
+const isFirefoxSidebar = (() => {
+  if (!isFirefox) return false;
+  if (typeof chrome === 'undefined' || !chrome.runtime?.id) return false;
+
+  // Check if we're in sidebar by URL (moz-extension://.../index.html in sidebar)
+  const isExtensionPage = typeof window !== 'undefined' &&
+    (window.location.href.startsWith('moz-extension://') ||
+     window.location.href.startsWith('chrome-extension://'));
+
+  // In sidebar, we can't use chrome.tabs.query effectively
+  // Background script has full access, sidebar doesn't
+  return isExtensionPage;
+})();
+
+console.log('[SecureStorage] Environment detection:', {
+  isFirefox,
+  isFirefoxSidebar,
+  hasChromeRuntime: typeof chrome !== 'undefined' && !!chrome.runtime?.id,
+  hasChromeTabs: typeof chrome !== 'undefined' && !!chrome.tabs,
+  hasChromeStorage: typeof chrome !== 'undefined' && !!chrome.storage?.local,
+  currentURL: typeof window !== 'undefined' ? window.location.href : 'N/A'
+});
+
+// Helper function to send message to background (Firefox uses browser API for Promise support)
+async function sendToBackground<T>(message: any): Promise<T | undefined> {
+  console.log('[SecureStorage] sendToBackground called with action:', message.action);
+  if (isFirefoxSidebar) {
+    // Firefox: use browser.runtime.sendMessage for native Promise support
+    const browserApi = (globalThis as any).browser || chrome;
+    console.log('[SecureStorage] Sending message via', (globalThis as any).browser ? 'browser API' : 'chrome API');
+
+    try {
+      const response = await browserApi.runtime.sendMessage(message);
+      console.log('[SecureStorage] Received response:', response);
+      return response;
+    } catch (error) {
+      console.error('[SecureStorage] Message send error:', error);
+      throw error;
+    }
+  }
+  // Chrome: use chrome.runtime.sendMessage with callback wrapped in Promise
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(message, (response) => {
+      console.log('[SecureStorage] Chrome received response:', response);
+      resolve(response);
+    });
+  });
+}
 
 // Helper function to access storage (works in Firefox sidebar via background script)
 async function storageGet(keys: string | string[]): Promise<Record<string, any>> {
+  console.log('[SecureStorage] storageGet called, keys:', keys, 'isFirefoxSidebar:', isFirefoxSidebar);
+
+  // Always use background proxy in Firefox sidebar context
   if (isFirefoxSidebar) {
-    // Firefox sidebar: always use background script
-    const response = await chrome.runtime.sendMessage({ action: 'STORAGE_GET', keys });
-    return response?.result || {};
+    console.log('[SecureStorage] Using background script proxy for storageGet');
+    try {
+      const response = await sendToBackground<{ result: Record<string, any> }>({ action: 'STORAGE_GET', keys });
+      console.log('[SecureStorage] Background response:', response);
+      return response?.result || {};
+    } catch (error) {
+      console.error('[SecureStorage] Background proxy failed:', error);
+      return {};
+    }
   }
+
   // Direct access (Chrome or Firefox background)
-  const result = await chrome.storage.local.get(keys);
-  return result || {};
+  try {
+    const result = await chrome.storage.local.get(keys);
+    console.log('[SecureStorage] Direct storage.local.get result:', result);
+
+    // Firefox sidebar bug: storage.local.get returns undefined instead of {}
+    // If we get undefined, try using background proxy instead
+    if (result === undefined || result === null) {
+      console.log('[SecureStorage] Direct access returned undefined, trying background proxy');
+      try {
+        const response = await sendToBackground<{ result: Record<string, any> }>({ action: 'STORAGE_GET', keys });
+        return response?.result || {};
+      } catch {
+        return {};
+      }
+    }
+
+    return result || {};
+  } catch (error) {
+    console.error('[SecureStorage] Direct storage access failed:', error);
+    // Fallback to background proxy
+    try {
+      const response = await sendToBackground<{ result: Record<string, any> }>({ action: 'STORAGE_GET', keys });
+      return response?.result || {};
+    } catch {
+      return {};
+    }
+  }
 }
 
 async function storageSet(data: Record<string, any>): Promise<void> {
+  console.log('[SecureStorage] storageSet called, data keys:', Object.keys(data), 'isFirefoxSidebar:', isFirefoxSidebar);
+
+  // Always use background proxy in Firefox sidebar context
   if (isFirefoxSidebar) {
-    // Firefox sidebar: always use background script
-    await chrome.runtime.sendMessage({ action: 'STORAGE_SET', data });
-    return;
+    console.log('[SecureStorage] Using background script proxy for storageSet');
+    try {
+      const response = await sendToBackground<{ success: boolean | string; error?: string }>({ action: 'STORAGE_SET', data });
+      console.log('[SecureStorage] storageSet response:', response);
+      // Check success - handle both boolean true and string "true"
+      if (!response || (response.success !== true && response.success !== 'true')) {
+        throw new Error(response?.error || 'Failed to set storage');
+      }
+      return;
+    } catch (error) {
+      console.error('[SecureStorage] Background proxy failed:', error);
+      throw error;
+    }
   }
-  await chrome.storage.local.set(data);
+
+  // Direct access (Chrome or Firefox background)
+  try {
+    await chrome.storage.local.set(data);
+    console.log('[SecureStorage] Direct storage.local.set completed');
+  } catch (error) {
+    console.error('[SecureStorage] Direct storage.local.set failed:', error);
+    // Fallback to background proxy
+    console.log('[SecureStorage] Trying background proxy as fallback');
+    const response = await sendToBackground<{ success: boolean | string; error?: string }>({ action: 'STORAGE_SET', data });
+    console.log('[SecureStorage] storageSet fallback response:', response);
+    if (!response || (response.success !== true && response.success !== 'true')) {
+      throw new Error(response?.error || 'Failed to set storage');
+    }
+  }
 }
 
 async function storageRemove(keys: string | string[]): Promise<void> {
+  console.log('[SecureStorage] storageRemove called, keys:', keys, 'isFirefoxSidebar:', isFirefoxSidebar);
+
+  // Always use background proxy in Firefox sidebar context
   if (isFirefoxSidebar) {
-    // Firefox sidebar: always use background script
-    await chrome.runtime.sendMessage({ action: 'STORAGE_REMOVE', keys });
-    return;
+    console.log('[SecureStorage] Using background script proxy for storageRemove');
+    try {
+      const response = await sendToBackground<{ success: boolean | string; error?: string }>({ action: 'STORAGE_REMOVE', keys });
+      console.log('[SecureStorage] storageRemove response:', response);
+      // Check success - handle both boolean true and string "true"
+      if (!response || (response.success !== true && response.success !== 'true')) {
+        throw new Error(response?.error || 'Failed to remove storage');
+      }
+      return;
+    } catch (error) {
+      console.error('[SecureStorage] Background proxy failed:', error);
+      throw error;
+    }
   }
-  await chrome.storage.local.remove(keys);
+
+  // Direct access (Chrome or Firefox background)
+  try {
+    await chrome.storage.local.remove(keys);
+    console.log('[SecureStorage] Direct storage.local.remove completed');
+  } catch (error) {
+    console.error('[SecureStorage] Direct storage.local.remove failed:', error);
+    // Fallback to background proxy
+    console.log('[SecureStorage] Trying background proxy as fallback');
+    const response = await sendToBackground<{ success: boolean | string; error?: string }>({ action: 'STORAGE_REMOVE', keys });
+    console.log('[SecureStorage] storageRemove fallback response:', response);
+    if (!response || (response.success !== true && response.success !== 'true')) {
+      throw new Error(response?.error || 'Failed to remove storage');
+    }
+  }
 }
 
 export class SecureStorage {
@@ -193,26 +330,41 @@ export class SecureStorage {
    * 设置主密码（首次使用）
    */
   static async setupMasterPassword(password: string): Promise<{ success: boolean; error?: string }> {
+    console.log('[SecureStorage] setupMasterPassword called');
     if (password.length < 6) {
+      console.log('[SecureStorage] Password too short:', password.length);
       return { success: false, error: '密码长度至少需要6个字符' };
     }
 
     try {
+      console.log('[SecureStorage] Hashing password...');
       const hash = await this.hashPassword(password);
+      console.log('[SecureStorage] Password hashed, saving to storage...');
+
+      console.log('[SecureStorage] Calling storageSet for masterPasswordHash');
       await storageSet({ masterPasswordHash: hash });
+      console.log('[SecureStorage] masterPasswordHash saved successfully');
 
       // 立即解锁会话
       this.isUnlocked = true;
 
       // 加密存储一个测试值以验证密码
+      console.log('[SecureStorage] Encrypting test value...');
       const testEncrypted = await this.encryptData('luminasider-test', password);
+      console.log('[SecureStorage] Test value encrypted, saving to storage...');
+
+      console.log('[SecureStorage] Calling storageSet for passwordTestKey');
       await storageSet({ passwordTestKey: testEncrypted });
+      console.log('[SecureStorage] passwordTestKey saved successfully');
 
       // 存储密码
+      console.log('[SecureStorage] Saving master password...');
       await this.saveMasterPassword(password);
+      console.log('[SecureStorage] Master password saved');
 
       return { success: true };
-    } catch {
+    } catch (error) {
+      console.error('[SecureStorage] setupMasterPassword error:', error);
       return { success: false, error: '设置密码失败' };
     }
   }

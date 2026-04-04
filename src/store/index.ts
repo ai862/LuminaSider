@@ -3,16 +3,75 @@ import { persist, StateStorage, createJSONStorage } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 import * as idb from 'idb-keyval';
 
+// --- Environment Detection ---
+const isFirefoxSidebar = (() => {
+  if (typeof window === 'undefined') return false;
+  const ua = navigator.userAgent.toLowerCase();
+  if (!ua.includes('firefox')) return false;
+  return window.location.href.startsWith('moz-extension://');
+})();
+
+// --- Background Storage Proxy for Firefox sidebar ---
+const sendToBackground = async (message: any): Promise<any> => {
+  if (isFirefoxSidebar) {
+    const browserApi = (globalThis as any).browser || chrome;
+    return browserApi.runtime.sendMessage(message);
+  }
+  return null;
+};
+
 // --- Chrome Storage Engine for Zustand ---
 const chromeStorage: StateStorage = {
   getItem: async (name: string): Promise<string | null> => {
+    console.log('[Store] chromeStorage.getItem called:', name, 'isFirefoxSidebar:', isFirefoxSidebar);
+
+    if (isFirefoxSidebar) {
+      try {
+        const response = await sendToBackground({ action: 'STORAGE_GET', keys: [name] });
+        console.log('[Store] Background proxy response:', response);
+        return (response?.result?.[name]) || null;
+      } catch (error) {
+        console.error('[Store] Background proxy failed:', error);
+        return null;
+      }
+    }
+
     const result = await chrome.storage.local.get(name);
     return result[name] || null;
   },
   setItem: async (name: string, value: string): Promise<void> => {
+    console.log('[Store] chromeStorage.setItem called:', name, 'isFirefoxSidebar:', isFirefoxSidebar);
+
+    if (isFirefoxSidebar) {
+      try {
+        const response = await sendToBackground({ action: 'STORAGE_SET', data: { [name]: value } });
+        console.log('[Store] Background proxy setItem response:', response);
+        if (!response?.success && response?.success !== true) {
+          throw new Error(response?.error || 'Failed to save');
+        }
+        return;
+      } catch (error) {
+        console.error('[Store] Background proxy failed:', error);
+        throw error;
+      }
+    }
+
     await chrome.storage.local.set({ [name]: value });
   },
   removeItem: async (name: string): Promise<void> => {
+    console.log('[Store] chromeStorage.removeItem called:', name, 'isFirefoxSidebar:', isFirefoxSidebar);
+
+    if (isFirefoxSidebar) {
+      try {
+        const response = await sendToBackground({ action: 'STORAGE_REMOVE', keys: [name] });
+        console.log('[Store] Background proxy removeItem response:', response);
+        return;
+      } catch (error) {
+        console.error('[Store] Background proxy failed:', error);
+        throw error;
+      }
+    }
+
     await chrome.storage.local.remove(name);
   },
 };
