@@ -7,6 +7,7 @@ import { HistoryDrawer } from './components/HistoryDrawer';
 import { UnlockModal } from './components/UnlockModal';
 import { AgentDrawer } from './components/AgentDrawer';
 import { AgentManager } from './components/AgentManager';
+import { AnalysisCard } from './components/AnalysisCard';
 import { useStore } from './store';
 import SecureStorage from './utils/secureStorage';
 
@@ -44,6 +45,7 @@ function App() {
   return (
     <div className="w-full h-screen bg-white dark:bg-primary text-primary dark:text-white flex flex-col relative overflow-hidden">
       <Header />
+      <AnalysisCard />
       <ChatArea />
       <InputArea />
       <HistoryDrawer />

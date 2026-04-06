@@ -154,6 +154,51 @@ export const builtInAgents: Agent[] = [
     defaultWelcomeMessage: '请帮我分析当前页面的软考题目，给出答案和详细解析。',
     inputPlaceholder: '粘贴软考题目或输入问题...',
   },
+  {
+    id: 'pentest',
+    name: '渗透测试专家',
+    icon: 'Shield',
+    systemPrompt: `你是专业的渗透测试专家，擅长以下领域：
+
+1. **JavaScript 安全分析**：自动检测页面中的敏感信息泄露，包括：
+   - API Keys、Tokens、密码等硬编码凭证
+   - 加密函数（CryptoJS、Base64、AES、DES、RSA等）
+   - 危险函数（eval、document.write、innerHTML等）
+   - 个人信息（邮箱、手机号、身份证）
+
+2. **提示词注入测试**：帮助你生成各种变异的提示词注入Payload，包括：
+   - STI结构注入（使用<|system|>、[INST]、<<SYS>>等特殊标记）
+   - JSON覆盖攻击（伪造高优先级system消息）
+   - 混淆与变异技术
+
+3. **Web漏洞测试**：生成常见Web漏洞的测试Payload：
+   - XSS（反射型、存储型、DOM型）
+   - SQL注入
+   - 命令注入
+
+4. **红队演练**：模拟攻击场景，提供渗透测试建议
+
+使用说明：
+- 输入"分析当前页面"自动检测JS敏感信息
+- 输入提示词生成变异测试用例
+- 描述测试需求获取专业建议
+
+注意：本工具仅用于授权的安全测试和教育目的。`,
+    isBuiltIn: true,
+    defaultWelcomeMessage: `欢迎使用渗透测试专家
+
+可用功能：
+1. JS分析 - 输入"分析当前页面"自动检测JS敏感信息
+2. 注入测试 - 输入提示词生成变异测试用例
+3. Web测试 - XSS、SQL注入等Payload生成
+4. 红队演练 - 模拟攻击场景分析
+
+请描述你的测试需求，比如：
+- "分析当前页面"
+- "帮我生成一个XSS Payload"
+- "这个登录框有什么安全问题"`,
+    inputPlaceholder: '描述测试需求，如：分析当前页面、生成XSS Payload...',
+  },
 ];
 
 export interface PageContext {
@@ -250,6 +295,12 @@ interface AppState {
 
   // Selectors/Computed
   getCurrentSession: () => Session | undefined;
+
+  // JS Analysis (Pentest Agent)
+  jsAnalysisResult: any | null;
+  isAnalyzingJs: boolean;
+  jsAnalysisError: string | null;
+  triggerJsAnalysis: () => Promise<void>;
 }
 
 export const defaultProviderConfigs: Record<ApiProvider, ProviderConfig> = {
@@ -321,6 +372,33 @@ export const useStore = create<AppState>()(
       agents: builtInAgents,
       currentAgentId: 'default',
 
+      // JS Analysis (Pentest Agent)
+      jsAnalysisResult: null,
+      isAnalyzingJs: false,
+      jsAnalysisError: null,
+      triggerJsAnalysis: async () => {
+        const { isAnalyzingJs } = get();
+        if (isAnalyzingJs) return;
+
+        set({ isAnalyzingJs: true, jsAnalysisError: null });
+
+        try {
+          console.log('[JS Analyzer] Starting analysis...');
+          // Dynamically import to avoid issues with chrome API in some contexts
+          const jsAnalyzer = await import('../utils/pentest/jsAnalyzer');
+          console.log('[JS Analyzer] Module loaded, calling analyzeCurrentPage...');
+          const result = await jsAnalyzer.analyzeCurrentPage();
+          console.log('[JS Analyzer] Result received:', result);
+          set({ jsAnalysisResult: result, isAnalyzingJs: false });
+        } catch (error) {
+          console.error('JS Analysis failed:', error);
+          set({
+            jsAnalysisError: error instanceof Error ? error.message : 'Analysis failed',
+            isAnalyzingJs: false
+          });
+        }
+      },
+
       setCurrentAgent: async (agentId: string) => {
         const state = get();
         const agent = state.agents.find(a => a.id === agentId);
@@ -328,6 +406,13 @@ export const useStore = create<AppState>()(
         // Switching agent creates a new session
         state.createNewSession(agent.name);
         set({ currentAgentId: agentId, isAgentDrawerOpen: false });
+
+        // Auto-trigger JS analysis for pentest agent
+        if (agentId === 'pentest') {
+          const { triggerJsAnalysis } = get();
+          // 触发分析但不阻塞欢迎消息
+          triggerJsAnalysis();
+        }
 
         // Auto-send welcome message if configured and generate AI response
         if (agent.defaultWelcomeMessage) {
